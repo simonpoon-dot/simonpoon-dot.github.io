@@ -2,8 +2,9 @@ name: Generate Dashboard Screenshot
 
 on:
   schedule:
-    - cron: '*/2 * * * *'  # 每 5 分鐘自動執行一次
-  workflow_dispatch:       # 允許手動觸發
+    # 同時設定多個時間點，迫使 GitHub 的伺服器排隊佇列維持活躍
+    - cron: '*/2 * * * *'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -20,7 +21,6 @@ jobs:
         with:
           node-version: '18'
 
-      # 🔑 關鍵步驟：安裝繁體中文字體 (Noto Sans CJK TC)
       - name: Install Asian Fonts
         run: |
           sudo apt-get update
@@ -37,8 +37,9 @@ jobs:
             const browser = await puppeteer.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
             const page = await browser.newPage();
             await page.setViewport({ width: 800, height: 480 });
-            await page.goto("https://simonpoon-dot.github.io/index.html", { waitUntil: "networkidle0" });
-            await new Promise(r => setTimeout(r, 6000)); // 等待 6 秒確保 API 載入
+            // 帶入動態時間戳，確保 Puppeteer 每次抓取的都是最新 index.html
+            await page.goto("https://simonpoon-dot.github.io/index.html?t=" + Date.now(), { waitUntil: "networkidle0" });
+            await new Promise(r => setTimeout(r, 6000));
             await page.screenshot({ path: "dashboard.png" });
             await browser.close();
           })();
@@ -49,5 +50,6 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add dashboard.png
-          git commit -m "Auto-update dashboard screenshot with fonts" || exit 0
+          # 加上時間戳 Commit，讓 GitHub 知道這個 Repo 一直有新動態，永遠不會被停用
+          git commit -m "Auto-update dashboard screenshot [$(date +'%Y-%m-%d %H:%M:%S')]" || exit 0
           git push
