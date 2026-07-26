@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <script>
+    // 每次請求時，自動生成最新時間戳，徹底破除快取
+    const now = Date.now();
+    const targetUrl = encodeURIComponent("https://simonpoon-dot.github.io/index.html?t=" + now);
+    const microlinkUrl = "https://api.microlink.io/?url=" + targetUrl + "&screenshot=true&embed=screenshot.url&viewport.width=800&viewport.height=480&viewport.deviceScaleFactor=1&waitForTimeout=9000";
+    
+    // 自動跳轉至最新生成的圖片網址
+    window.location.href = microlinkUrl;
+  </script>
+</head>
+<body>
+  Redirecting to fresh screenshot...
+</body>
+</html>
