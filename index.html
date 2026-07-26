@@ -317,9 +317,12 @@
       <div class="panel-title">📌 每日告示 / 備忘</div>
       <div class="memo-container">
         <div class="memo-content" id="memo-text">
+
 1. 執齊書包, 水樽, 餐具, 帶手錶, 食蟲草丸
 2. 餵魚, 紙巾. 外套, 襪
 3. 屋苑密碼:7642,樓下閘密碼5630
+
+
         </div>
       </div>
     </div>
@@ -371,17 +374,10 @@
       }
     ];
 
-    // 強制獲取香港時區 (UTC+8) 的當前時間
-    function getHongKongDate() {
-      const now = new Date();
-      const hkTimeString = now.toLocaleString("en-US", { timeZone: "Asia/Hong_Kong" });
-      return new Date(hkTimeString);
-    }
-
-    // 全局通用 Fetch，帶有逾時超時機制
+    // 提高容忍時間至 12 秒，防止網路延遲導致中斷
     async function safeFetchJson(url) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6秒超時
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
       try {
         const res = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
@@ -399,7 +395,7 @@
 
       try {
         const json = await safeFetchJson(url);
-        const now = getHongKongDate(); // 強制使用香港時間作為計算基準
+        const now = new Date();
         
         let etas = [];
         if (json && json.data) {
@@ -420,12 +416,7 @@
           etaHtml = etas.map(etaItem => {
             const etaTime = new Date(etaItem.eta);
             const diffMinutes = Math.max(0, Math.round((etaTime - now) / 60000));
-            const timeStr = etaTime.toLocaleTimeString('zh-HK', { 
-              timeZone: 'Asia/Hong_Kong',
-              hour: '2-digit', 
-              minute: '2-digit', 
-              hour12: false 
-            });
+            const timeStr = etaTime.toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', hour12: false });
             return `<div class="eta-box"><div class="eta-time">${timeStr}</div><div class="eta-countdown">${diffMinutes === 0 ? "到站" : diffMinutes + "分"}</div></div>`;
           }).join('');
         }
@@ -460,12 +451,7 @@
       } catch (e) {
         container.innerHTML = `<div style="font-size: 13px; color:#555;">巴士數據更新失敗</div>`;
       }
-      document.getElementById("bus-updated").textContent = new Date().toLocaleTimeString('zh-HK', { 
-        timeZone: 'Asia/Hong_Kong',
-        hour: '2-digit', 
-        minute: '2-digit', 
-        hour12: false 
-      });
+      document.getElementById("bus-updated").textContent = new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', hour12: false });
       document.getElementById("bus-status").textContent = "正常";
     }
 
@@ -577,12 +563,7 @@
               </div>
             `;
           }).join('');
-          document.getElementById("weather-updated").textContent = new Date().toLocaleTimeString('zh-HK', { 
-            timeZone: 'Asia/Hong_Kong',
-            hour: '2-digit', 
-            minute: '2-digit', 
-            hour12: false 
-          });
+          document.getElementById("weather-updated").textContent = new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', hour12: false });
         } else {
           throw new Error("Invalid format");
         }
@@ -591,12 +572,23 @@
       }
     }
 
-    // 初始化與定時更新
-    updateBusETAs();
-    fetchHKOWarnings();
-    fetchHKOWeather();
-    fetchAndParseICal();
+    // 🚀 一次性等待所有 API 載入完成，並通知截圖器
+    async function initDashboard() {
+      await Promise.allSettled([
+        updateBusETAs(),
+        fetchHKOWarnings(),
+        fetchHKOWeather(),
+        fetchAndParseICal()
+      ]);
+      // 標示 DOM 載入完成，供 Puppeteer / Screenshot API 識別
+      document.body.classList.add('rendered');
+      window.IS_LOADED = true;
+    }
 
+    // 啟動初始化
+    initDashboard();
+
+    // 背景定時刷新
     setInterval(updateBusETAs, 30000);
     setInterval(fetchHKOWarnings, 300000);
     setInterval(fetchHKOWeather, 1800000);
