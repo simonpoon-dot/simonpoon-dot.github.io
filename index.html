@@ -371,18 +371,17 @@
       }
     ];
 
-    async function fetchWithFallback(url) {
+    // 全局通用 Fetch，帶有逾時超時機制
+    async function safeFetchJson(url) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6秒超時
       try {
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
         if (res.ok) return await res.json();
-      } catch (e) {}
-
-      try {
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-        const resProxy = await fetch(proxyUrl);
-        if (resProxy.ok) return await resProxy.json();
-      } catch (e) {}
-
+      } catch (e) {
+        clearTimeout(timeoutId);
+      }
       return null;
     }
 
@@ -392,7 +391,7 @@
         : `https://data.etabus.gov.hk/v1/transport/kmb/eta/${item.stopId}/${item.route}/${item.serviceType || 1}`;
 
       try {
-        const json = await fetchWithFallback(url);
+        const json = await safeFetchJson(url);
         const now = new Date();
         
         let etas = [];
@@ -435,7 +434,7 @@
               <div class="route-badge">${item.route}</div>
               <div><div class="destination">往 ${item.defaultDest || '目的地'}</div><div class="stop-name">${item.stopName}</div></div>
             </div>
-            <div class="eta-times"><div style="font-size: 12px; color: #666;">訊號更新中</div></div>
+            <div class="eta-times"><div style="font-size: 12px; color: #666;">無即時班次</div></div>
           </div>
         `;
       }
@@ -443,14 +442,18 @@
 
     async function updateBusETAs() {
       const container = document.getElementById("routes-container");
-      const htmlResults = await Promise.all(ROUTES.map(item => fetchSingleETA(item)));
-      container.innerHTML = htmlResults.join('');
+      try {
+        const htmlResults = await Promise.all(ROUTES.map(item => fetchSingleETA(item)));
+        container.innerHTML = htmlResults.join('');
+      } catch (e) {
+        container.innerHTML = `<div style="font-size: 13px; color:#555;">巴士數據更新失敗</div>`;
+      }
       document.getElementById("bus-updated").textContent = new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', hour12: false });
       document.getElementById("bus-status").textContent = "正常";
     }
 
     // ==========================================
-    // 📅 行程數據讀取 (支援 Apps Script 與代理 iCal)
+    // 📅 行程數據讀取
     // ==========================================
     async function fetchAndParseICal() {
       const container = document.getElementById("ical-container");
@@ -459,108 +462,21 @@
         return;
       }
 
-      // 情況 1: 使用 Google Apps Script 的 Web App 網址
-      if (ICAL_URL.includes("script.google.com")) {
-        try {
-          const res = await fetch(ICAL_URL);
-          if (!res.ok) throw new Error("Network response was not ok");
-          const events = await res.json();
-
-          if (!events || events.length === 0) {
-            container.innerHTML = `<div style="font-size: 13px;">近期無預錄行程</div>`;
-            return;
-          }
-
-          events.sort((a, b) => a.rawDate.localeCompare(b.rawDate));
-
-          container.innerHTML = events.slice(0, 4).map(ev => `
+      try {
+        const res = await safeFetchJson(ICAL_URL);
+        if (res && Array.isArray(res) && res.length > 0) {
+          res.sort((a, b) => (a.rawDate || "").localeCompare(b.rawDate || ""));
+          container.innerHTML = res.slice(0, 4).map(ev => `
             <div class="event-item">
-              <div class="event-date">${ev.dateStr}</div>
-              <div class="event-title">${ev.summary}</div>
+              <div class="event-date">${ev.dateStr || ''}</div>
+              <div class="event-title">${ev.summary || ''}</div>
             </div>
           `).join('');
           return;
-        } catch (e) {
-          console.error("Apps Script fetch error:", e);
-          container.innerHTML = `<div style="font-size: 12px; color:#333;">行程載入失敗<br>(請確認 Apps Script 權限設為「所有人」)</div>`;
-          return;
         }
-      }
+      } catch (e) {}
 
-      // 情況 2: 使用傳統 .ics 網址備用
-      let cleanUrl = ICAL_URL.trim().replace("webcal://", "https://");
-      const proxies = [
-        `https://corsproxy.io/?${encodeURIComponent(cleanUrl)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanUrl)}`
-      ];
-
-      let text = null;
-      for (let proxyUrl of proxies) {
-        try {
-          const res = await fetch(proxyUrl);
-          if (res.ok) {
-            text = await res.text();
-            if (text && text.includes("BEGIN:VCALENDAR")) break;
-          }
-        } catch (e) {}
-      }
-
-      if (!text) {
-        container.innerHTML = `<div style="font-size: 12px; color:#333;">行程載入失敗<br>(請確認日曆已公開)</div>`;
-        return;
-      }
-
-      const events = parseICS(text);
-      if (events.length === 0) {
-        container.innerHTML = `<div style="font-size: 13px;">近期無預錄行程</div>`;
-        return;
-      }
-
-      container.innerHTML = events.slice(0, 4).map(ev => `
-        <div class="event-item">
-          <div class="event-date">${ev.dateStr}</div>
-          <div class="event-title">${ev.summary}</div>
-        </div>
-      `).join('');
-    }
-
-    function parseICS(icsData) {
-      const lines = icsData.split(/\r\n|\n|\r/);
-      const events = [];
-      let currentEvent = null;
-
-      for (let line of lines) {
-        if (line.startsWith("BEGIN:VEVENT")) {
-          currentEvent = {};
-        } else if (line.startsWith("END:VEVENT")) {
-          if (currentEvent && currentEvent.dtstart && currentEvent.summary) {
-            events.push(currentEvent);
-          }
-          currentEvent = null;
-        } else if (currentEvent) {
-          if (line.startsWith("SUMMARY:")) {
-            currentEvent.summary = line.replace("SUMMARY:", "").trim();
-          } else if (line.startsWith("DTSTART")) {
-            const parts = line.split(":");
-            const dateVal = parts[parts.length - 1];
-            if (dateVal && dateVal.length >= 8) {
-              const y = dateVal.substring(0, 4);
-              const m = dateVal.substring(4, 6);
-              const d = dateVal.substring(6, 8);
-              currentEvent.dtstart = `${y}-${m}-${d}`;
-              currentEvent.rawDate = `${y}-${m}-${d}`;
-              currentEvent.dateStr = `${m}/${d}`;
-            }
-          }
-        }
-      }
-
-      const now = new Date();
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      
-      return events
-        .filter(ev => ev.rawDate >= today)
-        .sort((a, b) => a.rawDate.localeCompare(b.rawDate));
+      container.innerHTML = `<div style="font-size: 13px; color:#555;">近期無預錄行程</div>`;
     }
 
     // ==========================================
@@ -593,21 +509,11 @@
     }
 
     function getWarningIcon(text) {
-      if (text.includes("風球") || text.includes("颱風") || text.includes("旋風") || text.includes("信號")) {
-        return WARNING_ICONS.typhoon;
-      }
-      if (text.includes("雨") || text.includes("暴雨")) {
-        return WARNING_ICONS.rain;
-      }
-      if (text.includes("雷暴")) {
-        return WARNING_ICONS.thunder;
-      }
-      if (text.includes("酷熱")) {
-        return WARNING_ICONS.hot;
-      }
-      if (text.includes("寒冷")) {
-        return WARNING_ICONS.cold;
-      }
+      if (text.includes("風球") || text.includes("颱風") || text.includes("旋風") || text.includes("信號")) return WARNING_ICONS.typhoon;
+      if (text.includes("雨") || text.includes("暴雨")) return WARNING_ICONS.rain;
+      if (text.includes("雷暴")) return WARNING_ICONS.thunder;
+      if (text.includes("酷熱")) return WARNING_ICONS.hot;
+      if (text.includes("寒冷")) return WARNING_ICONS.cold;
       return WARNING_ICONS.generic;
     }
 
@@ -618,11 +524,9 @@
       const warningIcon = document.getElementById("warning-icon");
 
       try {
-        const data = await fetchWithFallback(url);
+        const data = await safeFetchJson(url);
         if (data && data.warningMessage && data.warningMessage.length > 0) {
-          let primaryWarning = data.warningMessage[0];
-          primaryWarning = primaryWarning.replace("現正生效", "").replace("發出", "");
-
+          let primaryWarning = data.warningMessage[0].replace("現正生效", "").replace("發出", "");
           warningIcon.innerHTML = getWarningIcon(primaryWarning);
           warningText.textContent = primaryWarning;
           warningBox.classList.add("active");
@@ -638,10 +542,9 @@
       const url = "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=fnd&lang=tc";
       const container = document.getElementById("weather-container");
       try {
-        const data = await fetchWithFallback(url);
+        const data = await safeFetchJson(url);
         if (data && data.weatherForecast) {
           const forecastList = data.weatherForecast.slice(0, 6);
-
           container.innerHTML = forecastList.map(item => {
             const month = item.forecastDate.substring(4, 6);
             const day = item.forecastDate.substring(6, 8);
@@ -678,4 +581,4 @@
     setInterval(fetchAndParseICal, 1800000);
   </script>
 </body>
-</html> 
+</html>
