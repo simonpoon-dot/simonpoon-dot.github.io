@@ -2,7 +2,6 @@ name: Generate Dashboard Screenshot
 
 on:
   schedule:
-    # 同時設定多個時間點，迫使 GitHub 的伺服器排隊佇列維持活躍
     - cron: '*/2 * * * *'
   workflow_dispatch:
 
@@ -30,16 +29,22 @@ jobs:
         run: npm install puppeteer
 
       - name: Take screenshot
+        # 🔑 關鍵：強制指定香港時區 Asia/Hong_Kong
+        env:
+          TZ: 'Asia/Hong_Kong'
         run: |
           node -e '
           const puppeteer = require("puppeteer");
           (async () => {
             const browser = await puppeteer.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
             const page = await browser.newPage();
+            // 確保瀏覽器內的 時區 也是香港
+            await page.emulateTimezone("Asia/Hong_Kong");
             await page.setViewport({ width: 800, height: 480 });
-            // 帶入動態時間戳，確保 Puppeteer 每次抓取的都是最新 index.html
             await page.goto("https://simonpoon-dot.github.io/index.html?t=" + Date.now(), { waitUntil: "networkidle0" });
-            await new Promise(r => setTimeout(r, 6000));
+            // 等待頁面的 initDashboard 標註渲染完畢
+            await page.waitForFunction(() => window.IS_LOADED === true, { timeout: 15000 }).catch(() => {});
+            await new Promise(r => setTimeout(r, 2000));
             await page.screenshot({ path: "dashboard.png" });
             await browser.close();
           })();
@@ -50,6 +55,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add dashboard.png
-          # 加上時間戳 Commit，讓 GitHub 知道這個 Repo 一直有新動態，永遠不會被停用
           git commit -m "Auto-update dashboard screenshot [$(date +'%Y-%m-%d %H:%M:%S')]" || exit 0
           git push
