@@ -1,0 +1,45 @@
+name: Generate Dashboard Screenshot
+
+on:
+  schedule:
+    # 每 5 分鐘自動執行一次 (Cron 語法)
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # 允許手動點擊按鈕觸發
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Puppeteer
+        run: npm install puppeteer
+
+      - name: Take screenshot
+        run: |
+          node -e '
+          const puppeteer = require("puppeteer");
+          (async () => {
+            const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
+            const page = await browser.newPage();
+            await page.setViewport({ width: 800, height: 480 });
+            await page.goto("https://simonpoon-dot.github.io/index.html", { waitUntil: "networkidle0" });
+            await page.waitForTimeout(5000); // 等待 5 秒讓 API 載入完成
+            await page.screenshot({ path: "dashboard.png" });
+            await browser.close();
+          })();
+          '
+
+      - name: Commit and push screenshot
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add dashboard.png
+          git commit -m "Auto-update dashboard screenshot" || exit 0
+          git push
