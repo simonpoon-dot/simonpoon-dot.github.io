@@ -352,7 +352,7 @@
         dir: "outbound",
         serviceType: "1",
         stopId: "5527FF8CC85CF139",
-        stopName: "興華西街(海盈邨)"
+        stopName: "興華西街(海盈邨)",
         defaultDest: "尚德"
       },
       {
@@ -365,7 +365,7 @@
       {
         company: "ctb",
         route: "702B",
-        stopId: "003546",
+        stopId: "003545",
         stopName: "海盈邨",
         defaultDest: "白田北"
       }
@@ -376,9 +376,14 @@
         const res = await fetch(url);
         if (res.ok) return await res.json();
       } catch (e) {}
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const resProxy = await fetch(proxyUrl);
-      return await resProxy.json();
+
+      try {
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        const resProxy = await fetch(proxyUrl);
+        if (resProxy.ok) return await resProxy.json();
+      } catch (e) {}
+
+      return null;
     }
 
     async function fetchSingleETA(item) {
@@ -466,7 +471,6 @@
             return;
           }
 
-          // 按照日期排序
           events.sort((a, b) => a.rawDate.localeCompare(b.rawDate));
 
           container.innerHTML = events.slice(0, 4).map(ev => `
@@ -615,10 +619,8 @@
 
       try {
         const data = await fetchWithFallback(url);
-        const warningMessage = data.warningMessage;
-
-        if (warningMessage && warningMessage.length > 0) {
-          let primaryWarning = warningMessage[0];
+        if (data && data.warningMessage && data.warningMessage.length > 0) {
+          let primaryWarning = data.warningMessage[0];
           primaryWarning = primaryWarning.replace("現正生效", "").replace("發出", "");
 
           warningIcon.innerHTML = getWarningIcon(primaryWarning);
@@ -637,24 +639,28 @@
       const container = document.getElementById("weather-container");
       try {
         const data = await fetchWithFallback(url);
-        const forecastList = data.weatherForecast.slice(0, 6);
+        if (data && data.weatherForecast) {
+          const forecastList = data.weatherForecast.slice(0, 6);
 
-        container.innerHTML = forecastList.map(item => {
-          const month = item.forecastDate.substring(4, 6);
-          const day = item.forecastDate.substring(6, 8);
-          const weekDay = item.week.replace("星期", "");
-          const dateStr = `${month}/${day} (${weekDay})`;
-          const svgIconHtml = getSVGIcon(item.ForecastIcon);
-          return `
-            <div class="weather-row">
-              <div class="weather-date">${dateStr}</div>
-              ${svgIconHtml}
-              <div class="weather-temp">${item.forecastMintemp.value}° - ${item.forecastMaxtemp.value}°C</div>
-              <div class="weather-rh">${item.forecastMinrh.value}-${item.forecastMaxrh.value}%</div>
-            </div>
-          `;
-        }).join('');
-        document.getElementById("weather-updated").textContent = new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', hour12: false });
+          container.innerHTML = forecastList.map(item => {
+            const month = item.forecastDate.substring(4, 6);
+            const day = item.forecastDate.substring(6, 8);
+            const weekDay = item.week.replace("星期", "");
+            const dateStr = `${month}/${day} (${weekDay})`;
+            const svgIconHtml = getSVGIcon(item.ForecastIcon);
+            return `
+              <div class="weather-row">
+                <div class="weather-date">${dateStr}</div>
+                ${svgIconHtml}
+                <div class="weather-temp">${item.forecastMintemp.value}° - ${item.forecastMaxtemp.value}°C</div>
+                <div class="weather-rh">${item.forecastMinrh.value}-${item.forecastMaxrh.value}%</div>
+              </div>
+            `;
+          }).join('');
+          document.getElementById("weather-updated").textContent = new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', hour12: false });
+        } else {
+          throw new Error("Invalid format");
+        }
       } catch (error) {
         container.innerHTML = `<div style="font-size: 12px;">天氣數據獲取失敗</div>`;
       }
