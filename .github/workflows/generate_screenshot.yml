@@ -2,7 +2,7 @@ name: Generate Dashboard Screenshot
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # 每 5 分鐘自動執行一次
+    - cron: '*/2 * * * *'  # 每 5 分鐘自動執行一次
   workflow_dispatch:       # 允許手動觸發
 
 permissions:
