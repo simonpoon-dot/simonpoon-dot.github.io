@@ -2,7 +2,7 @@ name: Generate Dashboard Screenshot
 
 on:
   schedule:
-    - cron: '*/2 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -29,7 +31,6 @@ jobs:
         run: npm install puppeteer
 
       - name: Take screenshot
-        # 🔑 關鍵：強制指定香港時區 Asia/Hong_Kong
         env:
           TZ: 'Asia/Hong_Kong'
         run: |
@@ -38,11 +39,9 @@ jobs:
           (async () => {
             const browser = await puppeteer.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
             const page = await browser.newPage();
-            // 確保瀏覽器內的 時區 也是香港
             await page.emulateTimezone("Asia/Hong_Kong");
             await page.setViewport({ width: 800, height: 480 });
             await page.goto("https://simonpoon-dot.github.io/index.html?t=" + Date.now(), { waitUntil: "networkidle0" });
-            // 等待頁面的 initDashboard 標註渲染完畢
             await page.waitForFunction(() => window.IS_LOADED === true, { timeout: 15000 }).catch(() => {});
             await new Promise(r => setTimeout(r, 2000));
             await page.screenshot({ path: "dashboard.png" });
@@ -50,10 +49,10 @@ jobs:
           })();
           '
 
-      - name: Commit and push screenshot
+      - name: Force Commit and Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add dashboard.png
-          git commit -m "Auto-update dashboard screenshot [$(date +'%Y-%m-%d %H:%M:%S')]" || exit 0
-          git push
+          git add -f dashboard.png
+          git commit -m "Auto-update screenshot [$(date +'%Y-%m-%d %H:%M:%S')]" || echo "No changes"
+          git push origin main
