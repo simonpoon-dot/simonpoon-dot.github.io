@@ -244,16 +244,17 @@
       flex: 1;
       border: 2px solid #000000;
       border-radius: 5px;
-      padding: 6px 8px;
+      padding: 4px 6px;
       background-color: #ffffff;
       display: flex;
       flex-direction: column;
       justify-content: flex-start;
+      overflow: hidden;
     }
     .memo-content {
       font-size: 20px;
       font-weight: 800;
-      line-height: 1.4;
+      line-height: 1.35;
       color: #000000;
       white-space: pre-line;
     }
@@ -313,15 +314,12 @@
     </div>
 
     <!-- 📌 右下方告示欄 -->
-    <div style="display: flex; flex-direction: column; flex: 1; margin-top: 2px;">
+    <div style="display: flex; flex-direction: column; flex: 1; margin-top: 0px; overflow: hidden;">
       <div class="panel-title">📌 每日告示 / 備忘</div>
       <div class="memo-container">
         <div class="memo-content" id="memo-text">1. 執齊書包, 水樽, 餐具, 帶手錶, 食蟲草丸
 2. 餵魚, 紙巾, 外套, 襪
-3. 屋苑密碼:7642, 樓下閘密碼:5630
-
-
-        </div>
+3. 屋苑密碼:7642, 樓下閘密碼:5630</div>
       </div>
     </div>
 
@@ -396,10 +394,9 @@
         const now = new Date();
         
         let etas = [];
+        // 修正：放寬過濾條件，只要該站點有 ETA 就直接採計，防止方向標籤匹配失敗
         if (json && json.data) {
-          etas = item.company === "ctb"
-            ? json.data.filter(dataItem => dataItem.eta).slice(0, 2)
-            : json.data.filter(dataItem => dataItem.dir === (item.dir === 'outbound' ? 'O' : 'I') && dataItem.eta).slice(0, 2);
+          etas = json.data.filter(dataItem => dataItem.eta).slice(0, 2);
         }
 
         let destName = item.defaultDest ? "往 " + item.defaultDest : "巴士路線";
