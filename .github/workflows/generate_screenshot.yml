@@ -2,11 +2,11 @@ name: Generate Dashboard Screenshot
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # 每 5 分鐘自動截圖一次
-  workflow_dispatch:       # 允許手動觸發
+    - cron: '*/5 * * * *'  # 每 5 分鐘自動執行一次
+  workflow_dispatch:       # 允許手動點擊觸發
 
 permissions:
-  contents: write          # 關鍵：給予 Actions 寫入檔案並 Push 的權限
+  contents: write
 
 jobs:
   screenshot:
@@ -32,10 +32,7 @@ jobs:
             const page = await browser.newPage();
             await page.setViewport({ width: 800, height: 480 });
             await page.goto("https://simonpoon-dot.github.io/index.html", { waitUntil: "networkidle0" });
-            
-            // 使用相容性最好的 setTimeout 等待 6 秒，確保巴士與 Google 日曆 API 載入完成
-            await new Promise(r => setTimeout(r, 6000));
-            
+            await new Promise(r => setTimeout(r, 6000)); // 等待 6 秒確保巴士與日曆 API 載入
             await page.screenshot({ path: "dashboard.png" });
             await browser.close();
           })();
