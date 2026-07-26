@@ -371,6 +371,13 @@
       }
     ];
 
+    // 強制獲取香港時區 (UTC+8) 的當前時間
+    function getHongKongDate() {
+      const now = new Date();
+      const hkTimeString = now.toLocaleString("en-US", { timeZone: "Asia/Hong_Kong" });
+      return new Date(hkTimeString);
+    }
+
     // 全局通用 Fetch，帶有逾時超時機制
     async function safeFetchJson(url) {
       const controller = new AbortController();
@@ -392,7 +399,7 @@
 
       try {
         const json = await safeFetchJson(url);
-        const now = new Date();
+        const now = getHongKongDate(); // 強制使用香港時間作為計算基準
         
         let etas = [];
         if (json && json.data) {
@@ -413,7 +420,12 @@
           etaHtml = etas.map(etaItem => {
             const etaTime = new Date(etaItem.eta);
             const diffMinutes = Math.max(0, Math.round((etaTime - now) / 60000));
-            const timeStr = etaTime.toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const timeStr = etaTime.toLocaleTimeString('zh-HK', { 
+              timeZone: 'Asia/Hong_Kong',
+              hour: '2-digit', 
+              minute: '2-digit', 
+              hour12: false 
+            });
             return `<div class="eta-box"><div class="eta-time">${timeStr}</div><div class="eta-countdown">${diffMinutes === 0 ? "到站" : diffMinutes + "分"}</div></div>`;
           }).join('');
         }
@@ -448,7 +460,12 @@
       } catch (e) {
         container.innerHTML = `<div style="font-size: 13px; color:#555;">巴士數據更新失敗</div>`;
       }
-      document.getElementById("bus-updated").textContent = new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', hour12: false });
+      document.getElementById("bus-updated").textContent = new Date().toLocaleTimeString('zh-HK', { 
+        timeZone: 'Asia/Hong_Kong',
+        hour: '2-digit', 
+        minute: '2-digit', 
+        hour12: false 
+      });
       document.getElementById("bus-status").textContent = "正常";
     }
 
@@ -560,7 +577,12 @@
               </div>
             `;
           }).join('');
-          document.getElementById("weather-updated").textContent = new Date().toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit', hour12: false });
+          document.getElementById("weather-updated").textContent = new Date().toLocaleTimeString('zh-HK', { 
+            timeZone: 'Asia/Hong_Kong',
+            hour: '2-digit', 
+            minute: '2-digit', 
+            hour12: false 
+          });
         } else {
           throw new Error("Invalid format");
         }
